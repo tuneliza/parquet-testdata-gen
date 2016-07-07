@@ -62,11 +62,11 @@
         </dependency>
         <!-- this is a hack to get rid of the (runtime) warning; not ideal from the authors' PoV,
         because it violates transparency; didn't help -->
-<!--        <dependency>
+        <dependency>
             <groupId>org.slf4j</groupId>
-            <artifactId>slf4j-simple</artifactId>
+            <artifactId>slf4j-api</artifactId>
             <version>1.7.21</version>
-        </dependency>-->
+        </dependency>
     </dependencies>
 
 </project>

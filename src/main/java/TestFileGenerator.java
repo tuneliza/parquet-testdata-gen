@@ -11,8 +11,9 @@ import java.util.Arrays;
 
 public class TestFileGenerator {
 
+    // TODO:
     // create variation matrix (map<list<values>>)
-    // list sample values for each data type
+    // list sample values (pool) for each data type
 
     /**
      * Create pairs of .parquet and .json files with test data generated from
@@ -43,7 +44,7 @@ public class TestFileGenerator {
 
 
         // create data that fits the schema
-        // TODO: decide how to do that
+        // TODO: decide how to do that (map probably)
         String line = "42";
 
         // build the file
@@ -51,11 +52,12 @@ public class TestFileGenerator {
         Path path = new Path(outputParquetFile.toURI());
         try {
             CsvParquetWriter writer = new CsvParquetWriter(path, schema, false); // enableDictionary: false
-            String[] fields = new String[]{line}; //line.split(Pattern.quote(CSV_DELIMITER));
+            String[] fields = new String[1]; //line.split(Pattern.quote(CSV_DELIMITER));
+            fields[0] = line;
             writer.write(Arrays.asList(fields));
             writer.close();
         } catch (java.io.IOException e){
-            System.out.println("IOException caught: writing parquet file");
+            System.out.println("IOException caught: error writing parquet file");
         } finally {
             // LOG.info("Number of lines: " + lineNumber);
             // Utils.closeQuietly(br);
