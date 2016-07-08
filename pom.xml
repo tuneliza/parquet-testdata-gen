@@ -8,15 +8,50 @@
     <artifactId>parquet-testdata-gen</artifactId>
     <version>1.0-SNAPSHOT</version>
 
+    <properties>
+        <parquet-version>1.8.1</parquet-version>
+        <slf4j-version>1.7.21</slf4j-version>
+    </properties>
+
+    <build>
+        <plugins>
+            <plugin>
+                <!-- Exec plugin to run the main program during "mvn test" -->
+                <groupId>org.codehaus.mojo</groupId>
+                <artifactId>exec-maven-plugin</artifactId>
+                <version>1.1.1</version>
+                <executions>
+                    <execution>
+                        <phase>test</phase>
+                        <goals>
+                            <goal>java</goal>
+                        </goals>
+                        <configuration>
+                            <mainClass>TestFileGenerator</mainClass>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
+
     <dependencies>
-        <!-- this is what central wants us to add. it is not enough by itself, and breaks the build if left in. -->
-<!--
+        <!--
+        This is what central wants us to add. It is not enough by itself.
+
+        Without specifying <type> as "pom", Maven looks for a jar file, which
+        this isn't; it's a SuperPOM that just aggregates the Parquet
+        submodules. However, including it seems to have no effect: if the
+        submodules are not explicitly listed as dependencies, the compile
+        step shits all over itself, complaining about unknown symbols.
+        -->
         <dependency>
             <groupId>org.apache.parquet</groupId>
             <artifactId>parquet</artifactId>
-            <version>1.8.1</version>
+            <version>${parquet-version}</version>
+            <type>pom</type>
         </dependency>
--->
+
         <dependency>
             <groupId>org.apache.hadoop</groupId>
             <artifactId>hadoop-core</artifactId>
@@ -28,45 +63,65 @@
             -->
         </dependency>
         <!-- matching the jackson-...-asl library versions -->
-<!--        <dependency>
+        <!--
+        <dependency>
             <groupId>org.codehaus.jackson</groupId>
             <artifactId>jackson-core-asl</artifactId>
             <version>1.0.1</version>
-        </dependency>-->
+        </dependency>
+        -->
+        <dependency>
+            <groupId>org.apache.parquet</groupId>
+            <artifactId>parquet-jackson</artifactId>
+            <version>${parquet-version}</version>
+        </dependency>
         <dependency>
             <groupId>org.apache.parquet</groupId>
             <artifactId>parquet-common</artifactId>
-            <version>1.8.1</version>
+            <version>${parquet-version}</version>
         </dependency>
         <dependency>
             <groupId>org.apache.parquet</groupId>
             <artifactId>parquet-encoding</artifactId>
-            <version>1.8.1</version>
+            <version>${parquet-version}</version>
         </dependency>
         <dependency>
             <groupId>org.apache.parquet</groupId>
             <artifactId>parquet-column</artifactId>
-            <version>1.8.1</version>
+            <version>${parquet-version}</version>
         </dependency>
         <dependency>
             <groupId>org.apache.parquet</groupId>
             <artifactId>parquet-hadoop</artifactId>
-            <version>1.8.1</version>
+            <version>${parquet-version}</version>
             <!--  matching the jackson-...-asl library versions -->
-<!--            <exclusions>
+            <!--
+            <exclusions>
                 <exclusion>
                     <groupId>org.codehaus.jackson</groupId>
                     <artifactId>jackson-core-asl</artifactId>
                 </exclusion>
-            </exclusions>-->
+            </exclusions>
+            -->
         </dependency>
-        <!-- this is a hack to get rid of the (runtime) warning; not ideal from the authors' PoV,
-        because it violates transparency; didn't help -->
-<!--        <dependency>
+        <!--
+        This is a hack to get rid of the (runtime) warning; not ideal from the
+        authors' PoV, because it violates transparency; didn't help.
+
+        Adding the API jar is suggested as a way in some Stack Overflow posts
+        to get rid of the implementation not found warning, but this is in
+        fact malarkey, at least in this case.
+        -->
+        <dependency>
+            <groupId>org.slf4j</groupId>
+            <artifactId>slf4j-api</artifactId>
+            <version>${slf4j-version}</version>
+        </dependency>
+        <dependency>
             <groupId>org.slf4j</groupId>
             <artifactId>slf4j-simple</artifactId>
-            <version>1.7.21</version>
-        </dependency>-->
+            <version>${slf4j-version}</version>
+        </dependency>
     </dependencies>
 
 </project>
