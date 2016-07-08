@@ -5,3 +5,6 @@ parquet-mr-tests/target/
 
 .idea/
 *.iml
+
+testcases/
+target/

@@ -21,7 +21,10 @@ public class TestFileGenerator {
      * by changing one variable at a time.
      *
      */
-    public static void main(String args[]){
+    public static void main(String args[]) throws Throwable{
+
+        Class.forName("org.codehaus.jackson.type.JavaType");
+
 
         // TODO: get directory for file storage from cmd line (?)
 
