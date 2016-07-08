@@ -7,6 +7,8 @@ import org.apache.parquet.schema.MessageTypeParser; // convert string to schema
 import org.apache.hadoop.fs.Path;
 
 import java.io.File;
+/*import java.nio.file.Files;
+import java.nio.file.FileSystems;*/
 import java.util.Arrays;
 
 public class TestFileGenerator {
@@ -21,10 +23,10 @@ public class TestFileGenerator {
      * by changing one variable at a time.
      *
      */
-    public static void main(String args[]) throws Throwable{
 
-        Class.forName("org.codehaus.jackson.type.JavaType");
+    public static void main(String args[]) throws Exception{
 
+        // Class.forName("org.codehaus.jackson.type.JavaType"); // used this for debugging
 
         // TODO: get directory for file storage from cmd line (?)
 
@@ -37,6 +39,19 @@ public class TestFileGenerator {
         String filename = "TestInt32";
         File outputParquetFile = new File("testcases/"+ filename +".parquet");
 
+        // Ian's file cleanup
+/*
+        if (args.length > 1) {
+            filename = args[1];
+        }
+        if (!filename.endsWith(".parquet")) {
+            filename += ".parquet";
+        }
+        java.nio.file.Path filePath =
+            FileSystems.getDefault().getPath("testcases", filename);
+        Files.deleteIfExists(filePath);
+        File outputParquetFile = new File(filePath.toString());
+*/
 
         // create desired schema
         // TODO: create schema generically => createSchema(...)
@@ -60,7 +75,7 @@ public class TestFileGenerator {
             writer.write(Arrays.asList(fields));
             writer.close();
         } catch (java.io.IOException e){
-            System.out.println("IOException caught: error writing parquet file");
+            System.err.println("error: " + e.getMessage());
         } finally {
             // LOG.info("Number of lines: " + lineNumber);
             // Utils.closeQuietly(br);
