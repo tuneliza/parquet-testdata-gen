@@ -8,8 +8,38 @@
     <artifactId>parquet-testdata-gen</artifactId>
     <version>1.0-SNAPSHOT</version>
 
+
+    <build>
+        <plugins>
+            <plugin>
+                <!-- Exec plugin to run the main program during "mvn test" -->
+                <groupId>org.codehaus.mojo</groupId>
+                <artifactId>exec-maven-plugin</artifactId>
+                <version>1.1.1</version>
+                <executions>
+                    <execution>
+                        <phase>test</phase>
+                        <goals>
+                            <goal>java</goal>
+                        </goals>
+                        <configuration>
+                            <mainClass>TestFileGenerator</mainClass>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
+
     <dependencies>
-        <!-- this is what central wants us to add. it is not enough by itself, and breaks the build if left in. -->
+        <!--
+        This is what central wants us to add. It is not enough by itself.
+        Without specifying <type> as "pom", Maven looks for a jar file, which
+        this isn't; it's a SuperPOM that just aggregates the Parquet
+        submodules. However, including it seems to have no effect: if the
+        submodules are not explicitly listed as dependencies, the compile
+        step shits all over itself, complaining about unknown symbols.
+        -->
         <!--
                 <dependency>
                     <groupId>org.apache.parquet</groupId>
