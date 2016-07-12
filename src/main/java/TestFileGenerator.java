@@ -51,12 +51,12 @@ public class TestFileGenerator {
     // private static final ... <String, String[]> valueMap;
 
 
-    private static String emitFlatSchemaString(int size, String firstType, boolean rotateTypes, RepetitionPattern rp) {
+    private static ArrayList<VarProperties> makePropertyList(int size, String firstType, boolean rotateTypes, RepetitionPattern rp){
         ArrayList<VarProperties> propertyList = new ArrayList<VarProperties>(size);
         int ti = rawTypeOptions.indexOf(firstType); // index for types
         int rmi = 0; // index for RepetitionMasks
 
-        for(int i = 0; i < size; i++) {
+        for (int i = 0; i < size; i++) {
             propertyList.add(new VarProperties(repetitionMasks.get(rp)[rmi], rawTypeOptions.get(ti)));
 
             // advance indexes
@@ -65,8 +65,11 @@ public class TestFileGenerator {
             }
             rmi = (rmi + 1) % repetitionMasks.get(rp).length;
         }
+        return propertyList;
+    }
 
-        // construct a string representation of a flat schema
+    // construct a string representation of a flat schema
+    private static String emitFlatSchemaString(ArrayList<VarProperties> propertyList){
         String rawSchema = "message m {\n";
         for (int count = 0; count < propertyList.size(); count++) {
             rawSchema += "  " + propertyList.get(count).repetition +
@@ -113,10 +116,10 @@ public class TestFileGenerator {
         File outputParquetFile = new File(filePath.toString());
 */
         // create schema
-        String rawSchema = emitFlatSchemaString(2, "boolean", true, RepetitionPattern.MIX_REQUIRED_OPTIONAL);
-        System.out.println(rawSchema);
+        ArrayList<VarProperties> proplist = makePropertyList(2, "boolean", true, RepetitionPattern.MIX_REQUIRED_OPTIONAL);
+        String rawSchema = emitFlatSchemaString(proplist);
+        System.out.println(rawSchema);  // for debug
         MessageType schema = MessageTypeParser.parseMessageType(rawSchema);
-
 
         // create data that fits the schema
         // TODO: decide how to do that (map probably)
