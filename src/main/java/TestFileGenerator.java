@@ -2,6 +2,7 @@
  * Created by liza on 7/6/16.
  */
 
+import org.apache.parquet.it.unimi.dsi.fastutil.Hash;
 import org.apache.parquet.schema.MessageType;       // schema definition
 import org.apache.parquet.schema.MessageTypeParser; // convert string to schema
 import org.apache.hadoop.fs.Path;
@@ -10,12 +11,76 @@ import java.io.File;
 /*import java.nio.file.Files;
 import java.nio.file.FileSystems;*/
 import java.util.Arrays;
+import java.util.ArrayList;
+import java.util.HashMap;
 
 public class TestFileGenerator {
+    /** Parameters for automatic schema generation */
 
-    // TODO:
-    // create variation matrix (map<list<values>>)
+    // Tuple of properties for a variable in schema
+    static class VarProperties{
+        String repetition;
+        String type;
+        VarProperties(String repetition, String type){
+            this.repetition = repetition;
+            this.type = type;
+        }
+    }
+
+    // Property definitons: repetition
+    // TODO: handle "repeated"
+    private enum RepetitionPattern {
+        ALL_REQUIRED, ALL_OPTIONAL, ALL_REPEATED, MIX_REQUIRED_OPTIONAL, MIX_REPEATED_REQUIRED, MIX_OPTIONAL_REPEATED
+    }
+    private static final HashMap<RepetitionPattern, String[]> repetitionMasks;
+    static{
+        repetitionMasks = new HashMap<RepetitionPattern, String[]>();
+        repetitionMasks.put(RepetitionPattern.ALL_REQUIRED, new String[]{"required"});
+        repetitionMasks.put(RepetitionPattern.ALL_OPTIONAL, new String[]{"optional"});
+        repetitionMasks.put(RepetitionPattern.MIX_REQUIRED_OPTIONAL, new String[]{"required", "optional"});
+    }
+
+    // Property definitions: type
+    // TODO: add "binary" (int94, string, etc.), "group" for nested types
+    // TODO: map logical types to raw parquet types
+    private static final ArrayList<String> rawTypeOptions = new ArrayList<String>(
+            Arrays.asList("boolean", "int32", "int64", "float", "double")
+    );
+
     // list sample values (pool) for each data type
+    // private static final ... <String, String[]> valueMap;
+
+
+    private static String emitFlatSchemaString(int size, String firstType, boolean rotateTypes, RepetitionPattern rp) {
+        ArrayList<VarProperties> propertyList = new ArrayList<VarProperties>(size);
+        int ti = rawTypeOptions.indexOf(firstType); // index for types
+        int rmi = 0; // index for RepetitionMasks
+
+        for(int i = 0; i < size; i++) {
+            propertyList.add(new VarProperties(repetitionMasks.get(rp)[rmi], rawTypeOptions.get(ti)));
+
+            // advance indexes
+            if (rotateTypes) {
+                ti = (ti + 1) % rawTypeOptions.size();
+            }
+            rmi = (rmi + 1) % repetitionMasks.get(rp).length;
+        }
+
+        // construct a string representation of a flat schema
+        String rawSchema = "message m {\n";
+        for (int count = 0; count < propertyList.size(); count++) {
+            rawSchema += "  " + propertyList.get(count).repetition +
+                    " " + propertyList.get(count).type +
+                    " var_" + count+";\n";
+        }
+        rawSchema += "}";
+
+        return rawSchema;
+    }
+
+    /** Parameters to generate data */
+
+
 
     /**
      * Create pairs of .parquet and .json files with test data generated from
@@ -24,14 +89,15 @@ public class TestFileGenerator {
      *
      */
 
+    // TODO: support nested types
     public static void main(String args[]) throws Exception{
 
-        // Class.forName("org.codehaus.jackson.type.JavaType"); // used this for debugging
-
-        // TODO: get directory for file storage from cmd line (?)
+        // Class.forName("org.codehaus.jackson.type.JavaType"); // used this to debug maven dependencies
 
         // repeat for every variable
-        // TODO: iterate over the matrix
+
+        // number of columns/variables
+        // everything of same type, or rotate
 
 
         // create file, open for writing
@@ -41,38 +107,27 @@ public class TestFileGenerator {
 
         // Ian's file cleanup
 /*
-        if (args.length > 1) {
-            filename = args[1];
-        }
-        if (!filename.endsWith(".parquet")) {
-            filename += ".parquet";
-        }
         java.nio.file.Path filePath =
             FileSystems.getDefault().getPath("testcases", filename);
         Files.deleteIfExists(filePath);
         File outputParquetFile = new File(filePath.toString());
 */
-
-        // create desired schema
-        // TODO: create schema generically => createSchema(...)
-        String rawSchema = "message m {\n" +
-                "  optional int32 number;\n" +
-                "}";
+        // create schema
+        String rawSchema = emitFlatSchemaString(2, "boolean", true, RepetitionPattern.MIX_REQUIRED_OPTIONAL);
+        System.out.println(rawSchema);
         MessageType schema = MessageTypeParser.parseMessageType(rawSchema);
 
 
         // create data that fits the schema
         // TODO: decide how to do that (map probably)
-        String line = "42";
+        String[] line = new String[]{"true", "42"};
 
         // build the file
         // TODO: refactor this out?
         Path path = new Path(outputParquetFile.toURI());
         try {
             CsvParquetWriter writer = new CsvParquetWriter(path, schema, false); // enableDictionary: false
-            String[] fields = new String[1]; //line.split(Pattern.quote(CSV_DELIMITER));
-            fields[0] = line;
-            writer.write(Arrays.asList(fields));
+            writer.write(Arrays.asList(line));
             writer.close();
         } catch (java.io.IOException e){
             System.err.println("error: " + e.getMessage());
@@ -82,9 +137,5 @@ public class TestFileGenerator {
         }
 
     }
-
-//    private static MessageType createSchema(){
-//
-//    }
 
 }
