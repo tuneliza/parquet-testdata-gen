@@ -130,9 +130,9 @@ public class TestFileGenerator {
                     new StorageDimensions(1, 1, 1),
                     new StorageDimensions(1, 2, 2),
                     new StorageDimensions(1, 8, 16),
-                    new StorageDimensions(2, 1, 2),
-                    new StorageDimensions(2, 2, 16),
-                    new StorageDimensions(2, 8, 1),
+                    new StorageDimensions(4, 1, 2),
+                    new StorageDimensions(4, 2, 16),
+                    new StorageDimensions(4, 8, 1),
                     new StorageDimensions(50, 1, 16),
                     new StorageDimensions(50, 2, 1),
                     new StorageDimensions(50, 8, 2)
@@ -153,7 +153,6 @@ public class TestFileGenerator {
     }
 
 
-
     /**
      * Create pairs of .parquet and .json files with test data generated from
      * the variation matrix.  The goal is to cover as many test cases as possible
@@ -162,45 +161,43 @@ public class TestFileGenerator {
      */
 
     // TODO: support nested types
-    public static void main(String args[]) throws Exception{
+    public static void main(String args[]){
 
         // Class.forName("org.codehaus.jackson.type.JavaType"); // used this to debug maven dependencies
 
-        // repeat for every variable
-
-        // number of columns/variables
-        // everything of same type, or rotate
-
+        // TODO: repeat for every set of variables
 
         // create file, open for writing
         // TODO: have a pattern for file naming
         String filename = "TestInt32";
         File outputParquetFile = new File("testcases/"+ filename +".parquet");
 
-        // Ian's file cleanup
-/*
-        java.nio.file.Path filePath =
-            FileSystems.getDefault().getPath("testcases", filename);
-        Files.deleteIfExists(filePath);
-        File outputParquetFile = new File(filePath.toString());
-*/
+        // file cleanup
+        if (outputParquetFile.exists() && !outputParquetFile.isDirectory()){
+            try{
+                outputParquetFile.delete();
+            } catch (Exception e){
+                System.err.println("error: " + e.getMessage());
+            }
+        }
+
         // create schema
         ArrayList<VarProperties> proplist = makePropertyList(2, "int32", false, RepetitionPattern.ALL_OPTIONAL);
         String rawSchema = emitFlatSchemaString(proplist);
         System.out.println(rawSchema);  // for debug
         MessageType schema = MessageTypeParser.parseMessageType(rawSchema);
 
-
-        // create data that fits the schema
-        // TODO: decide how to do that (map probably)
-
-        String[] line = new String[]{"12345", "42"};
-
-        // build the file
+        // file i/o
         Path path = new Path(outputParquetFile.toURI());
         try {
             CsvParquetWriter writer = new CsvParquetWriter(path, schema, false); // enableDictionary: false
+
+            // TODO: create data that fits the schema
+            String[] line = new String[]{"12345", "42"};
+
+            // write data to file
             writer.write(Arrays.asList(line));
+
             writer.close();
         } catch (java.io.IOException e){
             System.err.println("error: " + e.getMessage());
