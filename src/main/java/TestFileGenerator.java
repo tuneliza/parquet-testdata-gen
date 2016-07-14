@@ -18,8 +18,6 @@ public class TestFileGenerator {
 
     /** Schema parameters */
 
-    private static final int[] numberOfColumns = new int[]{1, 2, 6, 7, 50}; // TODO: include 0??
-
      // Property definitons: repetition
     private enum RepetitionPattern {
         ALL_REQUIRED, ALL_OPTIONAL, ALL_REPEATED, MIX_REQUIRED_OPTIONAL, MIX_REPEATED_REQUIRED, MIX_OPTIONAL_REPEATED
@@ -49,7 +47,7 @@ public class TestFileGenerator {
         valueMap.put("binary", new String[]{"z","cow says \'Mooo\'", "12345", "true", ""});
         // TODO: ^ how to make it string? -> invoke Types.as(UTF8)?
     }
-    private static final int[] repeatedTypeSizes = new int[]{1, 3, 20, 100, 0};
+    private static final int[] repeatedTypeSizes = new int[]{1, 3, 20, 0}; // test a very large size separately
 
     /**
      Storage size parameters : data-block-page dimensions
@@ -69,7 +67,7 @@ public class TestFileGenerator {
                     new StorageDimensions(50, 8, 2)
             };
 
-    /** ---------- Support data structures for test case generation ----------- */
+    /** ---------- Support for test case generation ----------- */
 
     // Tuple of properties for a variable in schema
     static class VarProperties{
@@ -110,7 +108,7 @@ public class TestFileGenerator {
     // TODO: add "group" for nested types
     // TODO: map logical types to raw parquet types (int94, string, etc.)
     private static final ArrayList<String> rawTypeOptions = new ArrayList<String>(
-            Arrays.asList("boolean", "int32", "int64", "float", "double", "binary")
+            Arrays.asList("boolean", "int32", "int64", "float", "double") // , "binary")
     );
 
     // build a list of variable properties for a flat schema
@@ -178,8 +176,27 @@ public class TestFileGenerator {
             return this;
         }
 
-        String getName(){
-            return "testcases/"+ name +".parquet";
+        String getNameParquet(String pathToFile){
+            return pathToFile+ name +".parquet";
+        }
+
+        String getNameJSON(String pathToFile){
+            return pathToFile+ name +".json";
+        }
+
+        String getNameSchema(String pathToFile){
+            return pathToFile+ name +".schema";
+        }
+    }
+
+    private String repPatternToString(RepetitionPattern rp){
+        switch(rp){
+            case ALL_OPTIONAL: return "mask-optional";
+            case ALL_REPEATED: return "mask-repeated";
+            case ALL_REQUIRED: return "mask-required";
+            case MIX_OPTIONAL_REPEATED: return "mask-optional-repeater";
+            case MIX_REPEATED_REQUIRED: return "mask-repeated-required";
+            case MIX_REQUIRED_OPTIONAL: return "mask-required-optional";
         }
     }
 
@@ -192,17 +209,37 @@ public class TestFileGenerator {
      *
      */
 
-    // TODO: support nested types
-    public static void main(String args[]){
+    static class TestOptions{
+        String firstType;
+        boolean rotateType;
+        int numColumns;
+        long numRecords;
+        RepetitionPattern repMask;
 
-        // Class.forName("org.codehaus.jackson.type.JavaType"); // used this to debug maven dependencies
+        // compression;
+        // encodings;
+        StorageDimensions storage;
 
-        // TODO: repeat for every set of variables
+        TestOptions(String ft, boolean rt, int nc, long nr, RepetitionPattern rp, StorageDimensions sd){
+            firstType = ft;
+            rotateType = rt;
+            numColumns = nc;
+            numRecords = nr;
+            repMask = rp;
+            storage = sd;
+        }
 
-        // create file, open for writing
-        // TODO: have a pattern for file naming
-        String filename = "TestInt32";
-        File outputParquetFile = new File("testcases/"+ filename +".parquet");
+        TestOptions(String ft, boolean rt, int nc, long nr, RepetitionPattern rp){
+            this(ft, rt, nc, nr, rp,  null);
+        }
+    }
+
+    // generate test case
+    public static void generateTestCase(String filename, TestOptions options){
+
+        // make files, open for writing
+        File outputParquetFile = new File(filename);
+
 
         // file cleanup
         if (outputParquetFile.exists() && !outputParquetFile.isDirectory()){
@@ -213,27 +250,58 @@ public class TestFileGenerator {
             }
         }
 
-        // create schema
-        ArrayList<VarProperties> proplist = makePropertyList(2, "int32", false, RepetitionPattern.ALL_OPTIONAL);
-        String rawSchema = emitFlatSchemaString(proplist);
-        System.out.println(rawSchema);  // for debug
+        // create schema  : numColumns, type, rotateType, repMask
+        ArrayList<VarProperties> propList = makePropertyList(options.numColumns, options.firstType,
+                options.rotateType, options.repMask);
+
+        String rawSchema = emitFlatSchemaString(propList);
         MessageType schema = MessageTypeParser.parseMessageType(rawSchema);
 
         // file i/o
-        Path path = new Path(outputParquetFile.toURI());
+        System.out.println(rawSchema);  // for debug
         try {
-            CsvParquetWriter writer = new CsvParquetWriter(path, schema, false); // enableDictionary: false
+            Path path = new Path(outputParquetFile.toURI());
+            CsvParquetWriter pWriter = new CsvParquetWriter(path, schema, false); // enableDictionary: false
 
-            // create a record that fits the schema
-            String[] line = new String[]{"12345", "42"};
+            // repeat 5 times = numRecords
+            for (int j = 0; j < 5; j++) {
 
-            // write data to file
-            writer.write(Arrays.asList(line));
+                // create a record that fits the schema
+                String[] record = new String[propList.size()];
+                for (int i = 0; i < propList.size(); i++) {
+                    record[i] = propList.get(i).getNextPrimitive();
+                }
 
-            writer.close();
+                // write data to file
+                pWriter.write(Arrays.asList(record));
+            }
+
+            pWriter.close();
         } catch (java.io.IOException e){
             System.err.println("error: " + e.getMessage());
         }
+
+    }
+
+
+    // TODO: support nested types
+    public static void main(String args[]){
+
+        // Class.forName("org.codehaus.jackson.type.JavaType"); // used this to debug maven dependencies
+
+        // TODO: repeat for every set of variables
+
+        // build parameter sets for primitive type testing
+        ArrayList<TestOptions> options = new ArrayList<TestOptions>();
+        for (int i = 0; i < rawTypeOptions.size(); i++) {
+            options.add(new TestOptions(rawTypeOptions.get(i), false, 1, 1, RepetitionPattern.ALL_REQUIRED));
+            options.add(new TestOptions(rawTypeOptions.get(i), false, 1, 5, RepetitionPattern.ALL_OPTIONAL));
+            options.add(new TestOptions(rawTypeOptions.get(i), false, 2, 5, RepetitionPattern.MIX_REQUIRED_OPTIONAL));
+        }
+        options.add(new TestOptions("int64", true, 6, 1, RepetitionPattern.ALL_OPTIONAL));
+        options.add(new TestOptions("float", true, 6, 5, RepetitionPattern.MIX_REQUIRED_OPTIONAL));
+
+
 
     }
 
