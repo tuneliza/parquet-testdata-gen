@@ -2,7 +2,6 @@
  * Created by liza on 7/6/16.
  */
 
-import org.apache.parquet.it.unimi.dsi.fastutil.Hash;
 import org.apache.parquet.schema.MessageType;       // schema definition
 import org.apache.parquet.schema.MessageTypeParser; // convert string to schema
 import org.apache.hadoop.fs.Path;
@@ -17,6 +16,10 @@ import java.util.HashMap;
 public class TestFileGenerator {
     /** Parameters for automatic schema generation */
 
+    private static final int[] numberOfColumns = new int[]{1, 2, 6, 7, 50}; // TODO: include 0??
+
+    // TODO: look into using org.apache.parquet.schema.Types to build a schema (extensibility)
+
     // Tuple of properties for a variable in schema
     static class VarProperties{
         String repetition;
@@ -28,7 +31,6 @@ public class TestFileGenerator {
     }
 
     // Property definitons: repetition
-    // TODO: handle "repeated"
     private enum RepetitionPattern {
         ALL_REQUIRED, ALL_OPTIONAL, ALL_REPEATED, MIX_REQUIRED_OPTIONAL, MIX_REPEATED_REQUIRED, MIX_OPTIONAL_REPEATED
     }
@@ -37,19 +39,18 @@ public class TestFileGenerator {
         repetitionMasks = new HashMap<RepetitionPattern, String[]>();
         repetitionMasks.put(RepetitionPattern.ALL_REQUIRED, new String[]{"required"});
         repetitionMasks.put(RepetitionPattern.ALL_OPTIONAL, new String[]{"optional"});
+        repetitionMasks.put(RepetitionPattern.ALL_REPEATED, new String[]{"repeated"});
         repetitionMasks.put(RepetitionPattern.MIX_REQUIRED_OPTIONAL, new String[]{"required", "optional"});
+        repetitionMasks.put(RepetitionPattern.MIX_OPTIONAL_REPEATED, new String[]{"optional", "repeated"});
+        repetitionMasks.put(RepetitionPattern.MIX_REPEATED_REQUIRED, new String[]{"repeated", "required"});
     }
 
     // Property definitions: type
-    // TODO: add "binary" (int94, string, etc.), "group" for nested types
-    // TODO: map logical types to raw parquet types
+    // TODO: add "group" for nested types
+    // TODO: map logical types to raw parquet types (int94, string, etc.)
     private static final ArrayList<String> rawTypeOptions = new ArrayList<String>(
-            Arrays.asList("boolean", "int32", "int64", "float", "double")
+            Arrays.asList("boolean", "int32", "int64", "float", "double", "binary")
     );
-
-    // list sample values (pool) for each data type
-    // private static final ... <String, String[]> valueMap;
-
 
     private static ArrayList<VarProperties> makePropertyList(int size, String firstType, boolean rotateTypes, RepetitionPattern rp){
         ArrayList<VarProperties> propertyList = new ArrayList<VarProperties>(size);
@@ -82,6 +83,74 @@ public class TestFileGenerator {
     }
 
     /** Parameters to generate data */
+
+    // list of sample values (pool) for each data type. Null value is always listed last.
+    private static final HashMap<String, String[]> valueMap;
+    static{
+        valueMap = new HashMap<String, String[]>();
+        valueMap.put("boolean", new String[]{"true", "false", ""});
+        valueMap.put("int32", new String[]{"0", "42", "-500000000", ""});
+        valueMap.put("int64", new String[]{"0", "-42", "900000000","-50000000001", ""});
+        valueMap.put("float", new String[]{"0.0", "1.12", "-71234.56", ""});
+        valueMap.put("double", new String[]{"0.0", "-1.12", "71234.56", "-5.00000000011", ""});
+        valueMap.put("binary", new String[]{"z","cow says \'Mooo\'", "12345", "true", ""});
+                // TODO: ^ how to make it string? -> invoke Types.as(UTF8)?
+    }
+    private static final int[] repeatedTypeSizes = new int[]{1, 3, 20, 100, 0};
+
+    // Storage size parameters
+
+    /**
+        data-block-page dimensions
+        Goal of these parameters is to test proper reading block at page/block boundaries;
+        This assumes that all columns are of the same type
+    */
+    static class StorageDimensions{
+        static final int TEST_PAGE_SIZE = 128; // make it small for faster testing
+        int numColumns;
+        int numBlocks;
+        int numPagesPerBlock;
+        StorageDimensions(int columns, int blocks, int pages){
+            numColumns = columns;
+            numBlocks = blocks;
+            numPagesPerBlock = pages;
+        }
+
+        long calcBlockSize(){
+            return ((long) TEST_PAGE_SIZE) * numColumns * numPagesPerBlock;
+        }
+
+        long calcNumRecords(int recordSize){
+            return ((long) TEST_PAGE_SIZE) * numBlocks * numColumns * numPagesPerBlock / recordSize;
+        }
+    }
+
+    private static final StorageDimensions[] sizeVariants =
+            new StorageDimensions[]{
+                    new StorageDimensions(1, 1, 1),
+                    new StorageDimensions(1, 2, 2),
+                    new StorageDimensions(1, 8, 16),
+                    new StorageDimensions(2, 1, 2),
+                    new StorageDimensions(2, 2, 16),
+                    new StorageDimensions(2, 8, 1),
+                    new StorageDimensions(50, 1, 16),
+                    new StorageDimensions(50, 2, 1),
+                    new StorageDimensions(50, 8, 2)
+            };
+
+    /** Generate descriptive filenames */
+    class TestFileName{
+        String name;
+
+        TestFileName(String testGroup){
+            name = testGroup;
+        }
+
+        TestFileName addVariation(String variationStr){
+            name += "_" + variationStr;
+            return this;
+        }
+    }
 
 
 
@@ -116,17 +185,18 @@ public class TestFileGenerator {
         File outputParquetFile = new File(filePath.toString());
 */
         // create schema
-        ArrayList<VarProperties> proplist = makePropertyList(2, "boolean", true, RepetitionPattern.MIX_REQUIRED_OPTIONAL);
+        ArrayList<VarProperties> proplist = makePropertyList(2, "int32", false, RepetitionPattern.ALL_OPTIONAL);
         String rawSchema = emitFlatSchemaString(proplist);
         System.out.println(rawSchema);  // for debug
         MessageType schema = MessageTypeParser.parseMessageType(rawSchema);
 
+
         // create data that fits the schema
         // TODO: decide how to do that (map probably)
-        String[] line = new String[]{"true", "42"};
+
+        String[] line = new String[]{"12345", "42"};
 
         // build the file
-        // TODO: refactor this out?
         Path path = new Path(outputParquetFile.toURI());
         try {
             CsvParquetWriter writer = new CsvParquetWriter(path, schema, false); // enableDictionary: false
@@ -134,9 +204,6 @@ public class TestFileGenerator {
             writer.close();
         } catch (java.io.IOException e){
             System.err.println("error: " + e.getMessage());
-        } finally {
-            // LOG.info("Number of lines: " + lineNumber);
-            // Utils.closeQuietly(br);
         }
 
     }
