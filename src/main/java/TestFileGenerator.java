@@ -37,7 +37,7 @@ public class TestFileGenerator {
 
     /** Data parameters */
 
-    // list of sample values (pool) for each data type. Null value is always listed last.
+    // List of sample values (pool) for each data type. Last element is always a Null-value.
     private static final HashMap<String, String[]> valueMap;
     static{
         valueMap = new HashMap<String, String[]>();
@@ -94,12 +94,15 @@ public class TestFileGenerator {
         }
 
         // pre: this.repetition = "repeated"
-        String[] getNextRepeated(int repSize){
-            String[] values = new String[repSize];
-            for (int i = 0; i < repSize; i++){
-                values[i] = getNextPrimitive();
+        String getNextRepeated(int repSize){
+            String values = "[";
+            if (repSize > 0) {
+                values += getNextPrimitive();
+                for (int i = 1; i < repSize; i++) {
+                    values += ", " + getNextPrimitive();
+                }
             }
-            return values;
+            return values + "]";
         }
     }
 
@@ -164,7 +167,7 @@ public class TestFileGenerator {
 
     /** Generate descriptive filenames */
     class TestFileName{
-        String name;
+        private String name;
 
         TestFileName(String testGroup){
             name = testGroup;
@@ -174,8 +177,11 @@ public class TestFileGenerator {
             name += "_" + variationStr;
             return this;
         }
-    }
 
+        String getName(){
+            return "testcases/"+ name +".parquet";
+        }
+    }
 
     /** ------------ Generative Routines ----------- */
 
@@ -218,7 +224,7 @@ public class TestFileGenerator {
         try {
             CsvParquetWriter writer = new CsvParquetWriter(path, schema, false); // enableDictionary: false
 
-            // TODO: create data that fits the schema
+            // create a record that fits the schema
             String[] line = new String[]{"12345", "42"};
 
             // write data to file
