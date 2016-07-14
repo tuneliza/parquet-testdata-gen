@@ -14,23 +14,13 @@ import java.util.ArrayList;
 import java.util.HashMap;
 
 public class TestFileGenerator {
-    /** Parameters for automatic schema generation */
+    /** --------- Lists of parameters for the test cases ---------- */
+
+    /** Schema parameters */
 
     private static final int[] numberOfColumns = new int[]{1, 2, 6, 7, 50}; // TODO: include 0??
 
-    // TODO: look into using org.apache.parquet.schema.Types to build a schema (extensibility)
-
-    // Tuple of properties for a variable in schema
-    static class VarProperties{
-        String repetition;
-        String type;
-        VarProperties(String repetition, String type){
-            this.repetition = repetition;
-            this.type = type;
-        }
-    }
-
-    // Property definitons: repetition
+     // Property definitons: repetition
     private enum RepetitionPattern {
         ALL_REQUIRED, ALL_OPTIONAL, ALL_REPEATED, MIX_REQUIRED_OPTIONAL, MIX_REPEATED_REQUIRED, MIX_OPTIONAL_REPEATED
     }
@@ -45,6 +35,74 @@ public class TestFileGenerator {
         repetitionMasks.put(RepetitionPattern.MIX_REPEATED_REQUIRED, new String[]{"repeated", "required"});
     }
 
+    /** Data parameters */
+
+    // list of sample values (pool) for each data type. Null value is always listed last.
+    private static final HashMap<String, String[]> valueMap;
+    static{
+        valueMap = new HashMap<String, String[]>();
+        valueMap.put("boolean", new String[]{"true", "false", ""});
+        valueMap.put("int32", new String[]{"0", "42", "-500000000", ""});
+        valueMap.put("int64", new String[]{"0", "-42", "900000000","-50000000001", ""});
+        valueMap.put("float", new String[]{"0.0", "1.12", "-71234.56", ""});
+        valueMap.put("double", new String[]{"0.0", "-1.12", "71234.56", "-5.00000000011", ""});
+        valueMap.put("binary", new String[]{"z","cow says \'Mooo\'", "12345", "true", ""});
+        // TODO: ^ how to make it string? -> invoke Types.as(UTF8)?
+    }
+    private static final int[] repeatedTypeSizes = new int[]{1, 3, 20, 100, 0};
+
+    /**
+     Storage size parameters : data-block-page dimensions
+     Goal of this set is to test proper reading block at page/block boundaries;
+     (This assumes that all columns are of the same type int32; pageSize is set in StorageDimensions.TEST_PAGE_SIZE)
+     */
+    private static final StorageDimensions[] sizeVariants =
+            new StorageDimensions[]{
+                    new StorageDimensions(1, 1, 1),
+                    new StorageDimensions(1, 2, 2),
+                    new StorageDimensions(1, 8, 16),
+                    new StorageDimensions(4, 1, 2),
+                    new StorageDimensions(4, 2, 16),
+                    new StorageDimensions(4, 8, 1),
+                    new StorageDimensions(50, 1, 16),
+                    new StorageDimensions(50, 2, 1),
+                    new StorageDimensions(50, 8, 2)
+            };
+
+    /** ---------- Support data structures for test case generation ----------- */
+
+    // Tuple of properties for a variable in schema
+    static class VarProperties{
+        String repetition;
+        String type;
+        int idx;        // position of next value in the valueMap[type]
+
+        VarProperties(String repetition, String type){
+            this.repetition = repetition;
+            this.type = type;
+            idx = 0;
+        }
+
+        String getNextPrimitive(){
+            String value = valueMap.get(type)[idx];
+            if(repetition == "optional"){
+                idx = (idx + 1) % valueMap.get(type).length;
+            } else {
+                idx = (idx + 1) % (valueMap.get(type).length - 1); // skip over the null-value
+            }
+            return value;
+        }
+
+        // pre: this.repetition = "repeated"
+        String[] getNextRepeated(int repSize){
+            String[] values = new String[repSize];
+            for (int i = 0; i < repSize; i++){
+                values[i] = getNextPrimitive();
+            }
+            return values;
+        }
+    }
+
     // Property definitions: type
     // TODO: add "group" for nested types
     // TODO: map logical types to raw parquet types (int94, string, etc.)
@@ -52,6 +110,7 @@ public class TestFileGenerator {
             Arrays.asList("boolean", "int32", "int64", "float", "double", "binary")
     );
 
+    // build a list of variable properties for a flat schema
     private static ArrayList<VarProperties> makePropertyList(int size, String firstType, boolean rotateTypes, RepetitionPattern rp){
         ArrayList<VarProperties> propertyList = new ArrayList<VarProperties>(size);
         int ti = rawTypeOptions.indexOf(firstType); // index for types
@@ -82,29 +141,7 @@ public class TestFileGenerator {
         return rawSchema;
     }
 
-    /** Parameters to generate data */
-
-    // list of sample values (pool) for each data type. Null value is always listed last.
-    private static final HashMap<String, String[]> valueMap;
-    static{
-        valueMap = new HashMap<String, String[]>();
-        valueMap.put("boolean", new String[]{"true", "false", ""});
-        valueMap.put("int32", new String[]{"0", "42", "-500000000", ""});
-        valueMap.put("int64", new String[]{"0", "-42", "900000000","-50000000001", ""});
-        valueMap.put("float", new String[]{"0.0", "1.12", "-71234.56", ""});
-        valueMap.put("double", new String[]{"0.0", "-1.12", "71234.56", "-5.00000000011", ""});
-        valueMap.put("binary", new String[]{"z","cow says \'Mooo\'", "12345", "true", ""});
-                // TODO: ^ how to make it string? -> invoke Types.as(UTF8)?
-    }
-    private static final int[] repeatedTypeSizes = new int[]{1, 3, 20, 100, 0};
-
-    // Storage size parameters
-
-    /**
-        data-block-page dimensions
-        Goal of these parameters is to test proper reading block at page/block boundaries;
-        This assumes that all columns are of the same type
-    */
+    /** Storage sie parameters */
     static class StorageDimensions{
         static final int TEST_PAGE_SIZE = 128; // make it small for faster testing
         int numColumns;
@@ -125,19 +162,6 @@ public class TestFileGenerator {
         }
     }
 
-    private static final StorageDimensions[] sizeVariants =
-            new StorageDimensions[]{
-                    new StorageDimensions(1, 1, 1),
-                    new StorageDimensions(1, 2, 2),
-                    new StorageDimensions(1, 8, 16),
-                    new StorageDimensions(4, 1, 2),
-                    new StorageDimensions(4, 2, 16),
-                    new StorageDimensions(4, 8, 1),
-                    new StorageDimensions(50, 1, 16),
-                    new StorageDimensions(50, 2, 1),
-                    new StorageDimensions(50, 8, 2)
-            };
-
     /** Generate descriptive filenames */
     class TestFileName{
         String name;
@@ -152,6 +176,8 @@ public class TestFileGenerator {
         }
     }
 
+
+    /** ------------ Generative Routines ----------- */
 
     /**
      * Create pairs of .parquet and .json files with test data generated from
