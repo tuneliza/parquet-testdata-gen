@@ -13,6 +13,11 @@ import java.nio.file.FileSystems;*/
 import java.util.Arrays;
 import java.util.ArrayList;
 import java.util.HashMap;
+import javax.json.Json;
+import javax.json.JsonObject;
+import javax.json.JsonReader;
+import java.io.StringReader;
+
 
 public class TestFileGenerator {
     /** --------- Lists of parameters for the test cases ---------- */
@@ -131,12 +136,15 @@ public class TestFileGenerator {
     }
 
     // construct a string representation of a flat schema
+
+    public static final String VAR_NAME_PREFIX = "var_";
+
     private static String emitFlatSchemaString(ArrayList<VarProperties> propertyList){
         String rawSchema = "message m {\n";
         for (int count = 0; count < propertyList.size(); count++) {
             rawSchema += "  " + propertyList.get(count).repetition +
                     " " + propertyList.get(count).type +
-                    " var_" + count+";\n";
+                    " " + VAR_NAME_PREFIX + count+";\n";
         }
         rawSchema += "}";
 
@@ -214,10 +222,24 @@ public class TestFileGenerator {
         }
     }
 
+    // TODO: use builder of parse a string representation ?
+    private static JsonObject convertRecordToJSON(String[] record, ArrayList<VarProperties> propList){
+        // build a string representation of JSON
+        String joString = "{";
+// TODO: stuff
+        joString += "}";
+        // read it into an object
+        JsonReader jsonReader = Json.createReader(new StringReader(joString));
+        JsonObject jo = jsonReader.readObject();
+        jsonReader.close();
+
+        return jo;
+    }
+
     /** ------------ Generative Routines ----------- */
 
     /**
-     * Create pairs of .parquet and .json files with test data generated from
+     * Create triplets of .parquet, .schema and .json files with test data generated from
      * the variation matrix.  The goal is to cover as many test cases as possible
      * by changing one variable at a time.
      *
@@ -258,7 +280,8 @@ public class TestFileGenerator {
         File outSchemaFile = new File(tfn.getNameSchema());
         deleteFileIfExists(outSchemaFile);
 
-        //TODO: JSON file
+        File outJsonFile = new File(tfn.getNameJSON());
+        deleteFileIfExists(outJsonFile);
 
         // create schema, along with corresponding property list
         ArrayList<VarProperties> propList = makePropertyList(options.numColumns, options.firstType,
@@ -275,7 +298,7 @@ public class TestFileGenerator {
 
             // generate and write data
             Path path = new Path(outParquetFile.toURI());
-            CsvParquetWriter pWriter = new CsvParquetWriter(path, schema, false); // enableDictionary: false
+            CsvParquetWriter pWriter = new CsvParquetWriter(path, schema, false); // enableDictionary: false - plain encoding
 
             for (int j = 0; j < options.numRecords; j++) {
 
@@ -289,9 +312,12 @@ public class TestFileGenerator {
                     }
                 }
 
-                // write data to file
+                // write data to parquet file
                 pWriter.write(Arrays.asList(record));
-                // TODO: write JSON
+
+                // build a JSON
+                JsonObject jo = convertRecordToJSON(record, propList);
+                // TODO: write jo to JSON
             }
 
             pWriter.close();

@@ -81,6 +81,11 @@
             <version>1.8.1</version>
         </dependency>
         <dependency>
+            <groupId>javax.json</groupId>
+            <artifactId>javax.json-api</artifactId>
+            <version>1.0</version>
+        </dependency>
+        <dependency>
             <groupId>org.apache.parquet</groupId>
             <artifactId>parquet-hadoop</artifactId>
             <version>1.8.1</version> <!--depends on jackson-mapper-asl-1.9.11, which conflicts with 1.0.1 pulled in earlier-->
