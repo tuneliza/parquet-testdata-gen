@@ -1,0 +1,3 @@
+message m {
+  required float var_0;
+}

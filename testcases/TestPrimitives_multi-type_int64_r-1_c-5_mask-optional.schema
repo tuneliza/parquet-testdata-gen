@@ -1,0 +1,7 @@
+message m {
+  optional int64 var_0;
+  optional float var_1;
+  optional double var_2;
+  optional boolean var_3;
+  optional int32 var_4;
+}

@@ -16,6 +16,7 @@ import java.util.HashMap;
 import javax.json.Json;
 import javax.json.JsonObject;
 import javax.json.JsonReader;
+import javax.json.JsonWriter;
 import java.io.StringReader;
 
 
@@ -41,6 +42,7 @@ public class TestFileGenerator {
 
     /** Data parameters */
 
+    // TODO: look up edge values
     // List of sample values (pool) for each data type. Last element is always a Null-value.
     private static final HashMap<String, String[]> valueMap;
     static{
@@ -51,7 +53,7 @@ public class TestFileGenerator {
         valueMap.put("float", new String[]{"0.0", "1.12", "-71234.56", ""});
         valueMap.put("double", new String[]{"0.0", "-1.12", "71234.56", "-5.00000000011", ""});
         valueMap.put("binary", new String[]{"z","cow says \'Mooo\'", "12345", "true", ""});
-        // TODO: ^ how to make it string? -> invoke Types.as(UTF8)?
+        // TODO: ^ how to make sure it's a string? -> invoke Types.as(UTF8)?
     }
     private static final int[] repeatedTypeSizes = new int[]{1, 3, 20, 0}; // test a very large size separately
 
@@ -144,7 +146,7 @@ public class TestFileGenerator {
         for (int count = 0; count < propertyList.size(); count++) {
             rawSchema += "  " + propertyList.get(count).repetition +
                     " " + propertyList.get(count).type +
-                    " " + VAR_NAME_PREFIX + count+";\n";
+                    " " + VAR_NAME_PREFIX + count + ";\n";
         }
         rawSchema += "}";
 
@@ -223,11 +225,24 @@ public class TestFileGenerator {
     }
 
     // TODO: use builder of parse a string representation ?
+    // TODO: support repeated type
     private static JsonObject convertRecordToJSON(String[] record, ArrayList<VarProperties> propList){
         // build a string representation of JSON
         String joString = "{";
-// TODO: stuff
+            for(int i=0; i < propList.size(); i++){
+                joString += "\"" + VAR_NAME_PREFIX + i + "\": ";
+                if(propList.get(i).repetition != "repeated"){
+                    if (record[i] == ""){
+                        record[i] = "null";
+                    } else if (propList.get(i).type == "bytearray"){
+                        record[i] = "\"" + record[i] + "\"";
+                    }
+                    joString += record[i];
+                    if (i < propList.size() -1) { joString += ", "; }
+                }
+            }
         joString += "}";
+
         // read it into an object
         JsonReader jsonReader = Json.createReader(new StringReader(joString));
         JsonObject jo = jsonReader.readObject();
@@ -300,6 +315,9 @@ public class TestFileGenerator {
             Path path = new Path(outParquetFile.toURI());
             CsvParquetWriter pWriter = new CsvParquetWriter(path, schema, false); // enableDictionary: false - plain encoding
 
+            //JsonWriter jsonWriter = Json.createWriter(new FileWriter(outJsonFile));
+            FileWriter jsonWriter =  new FileWriter(outJsonFile);
+
             for (int j = 0; j < options.numRecords; j++) {
 
                 // create a record that fits the schema
@@ -315,11 +333,13 @@ public class TestFileGenerator {
                 // write data to parquet file
                 pWriter.write(Arrays.asList(record));
 
-                // build a JSON
+                // build a JSON, write it to file
                 JsonObject jo = convertRecordToJSON(record, propList);
-                // TODO: write jo to JSON
+                jsonWriter.write(jo.toString() + "\n");
+                //jsonWriter.writeObject(jo);
             }
 
+            jsonWriter.close();
             pWriter.close();
         } catch (java.io.IOException e){
             System.err.println("error: " + e.getMessage());
