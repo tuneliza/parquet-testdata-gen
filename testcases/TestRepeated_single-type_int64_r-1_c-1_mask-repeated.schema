@@ -1,3 +1,0 @@
-message m {
-  repeated int64 var_0;
-}

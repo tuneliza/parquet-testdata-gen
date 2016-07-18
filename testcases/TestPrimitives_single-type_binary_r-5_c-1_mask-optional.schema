@@ -1,3 +1,0 @@
-message m {
-  optional binary var_0;
-}

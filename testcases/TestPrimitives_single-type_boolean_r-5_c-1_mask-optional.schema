@@ -1,3 +1,0 @@
-message m {
-  optional boolean var_0;
-}

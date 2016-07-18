@@ -1,3 +1,0 @@
-message m {
-  optional int64 var_0;
-}

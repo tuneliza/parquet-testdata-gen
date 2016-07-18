@@ -1,4 +1,0 @@
-message m {
-  repeated int32 var_0;
-  required int32 var_1;
-}

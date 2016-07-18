@@ -1,3 +1,0 @@
-message m {
-  repeated boolean var_0;
-}

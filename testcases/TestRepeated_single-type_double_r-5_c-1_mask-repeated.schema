@@ -1,3 +1,0 @@
-message m {
-  repeated double var_0;
-}

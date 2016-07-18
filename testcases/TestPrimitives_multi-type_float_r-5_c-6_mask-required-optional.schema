@@ -1,8 +1,0 @@
-message m {
-  required float var_0;
-  optional double var_1;
-  required binary var_2;
-  optional boolean var_3;
-  required int32 var_4;
-  optional int64 var_5;
-}

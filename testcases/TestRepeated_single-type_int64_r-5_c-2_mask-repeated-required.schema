@@ -1,4 +1,0 @@
-message m {
-  repeated int64 var_0;
-  required int64 var_1;
-}
