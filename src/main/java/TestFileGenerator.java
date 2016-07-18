@@ -52,7 +52,7 @@ public class TestFileGenerator {
         valueMap.put("int64", new String[]{"0", "-42", "900000000","-50000000001", ""});
         valueMap.put("float", new String[]{"0.0", "1.12", "-71234.56", ""});
         valueMap.put("double", new String[]{"0.0", "-1.12", "71234.56", "-5.00000000011", ""});
-        valueMap.put("binary", new String[]{"z","cow says \'Mooo\'", "12345", "true", ""});
+        valueMap.put("binary", new String[]{"@","cow says \'Mooo\'", "12345", "true", ""});
         // TODO: ^ how to make sure it's a string? -> invoke Types.as(UTF8)?
     }
     private static final int[] repeatedTypeSizes = new int[]{1, 3, 20, 0}; // test a very large size separately
@@ -62,7 +62,7 @@ public class TestFileGenerator {
      Goal of this set is to test proper reading block at page/block boundaries;
      (This assumes that all columns are of the same type int32; pageSize is set in StorageDimensions.TEST_PAGE_SIZE)
      */
-    private static final StorageDimensions[] sizeVariants =
+    private static final StorageDimensions[] storageVariants =
             new StorageDimensions[]{
                     new StorageDimensions(1, 1, 1),
                     new StorageDimensions(1, 2, 2),
@@ -81,15 +81,17 @@ public class TestFileGenerator {
     static class VarProperties{
         String repetition;
         String type;
-        int idx;        // position of next value in the valueMap[type]
+        private int idx;        // position of next value in the valueMap[type]
+        private int repSizeIdx;
 
         VarProperties(String repetition, String type){
             this.repetition = repetition;
             this.type = type;
             idx = 0;
+            repSizeIdx = 0;
         }
 
-        String getNextPrimitive(){
+        private String getNextPrimitive(){
             String value = valueMap.get(type)[idx];
             if(repetition == "optional"){
                 idx = (idx + 1) % valueMap.get(type).length;
@@ -99,24 +101,28 @@ public class TestFileGenerator {
             return value;
         }
 
-        // pre: this.repetition = "repeated"
-        String getNextRepeated(int repSize){
-            String values = "[";
-            if (repSize > 0) {
-                values += getNextPrimitive();
-                for (int i = 1; i < repSize; i++) {
-                    values += ", " + getNextPrimitive();
+        String getNextValue(){
+            if (repetition == "repeated") {
+                String values = "";
+                if (repeatedTypeSizes[repSizeIdx] > 0) {
+                    values += getNextPrimitive();
+                    for (int i = 1; i < repeatedTypeSizes[repSizeIdx]; i++) {
+                        values += "|" + getNextPrimitive();
+                    }
                 }
+                repSizeIdx = (repSizeIdx + 1) % repeatedTypeSizes.length;
+                return values;
             }
-            return values + "]";
+
+            return getNextPrimitive();
         }
     }
 
     // Property definitions: type
     // TODO: add "group" for nested types
-    // TODO: map logical types to raw parquet types (int94, string, etc.)
+    // TODO: map logical types to raw parquet types (int94, date, time, etc.)
     private static final ArrayList<String> rawTypeOptions = new ArrayList<String>(
-            Arrays.asList("boolean", "int32", "int64", "float", "double") // , "binary") // , "bytearray")?
+            Arrays.asList("boolean", "int32", "int64", "float", "double", "binary")
     );
 
     // build a list of variable properties for a flat schema
@@ -224,21 +230,29 @@ public class TestFileGenerator {
         }
     }
 
-    // TODO: use builder of parse a string representation ?
-    // TODO: support repeated type
+    // TODO: use builder or parse a string representation ?
     private static JsonObject convertRecordToJSON(String[] record, ArrayList<VarProperties> propList){
         // build a string representation of JSON
         String joString = "{";
             for(int i=0; i < propList.size(); i++){
                 joString += "\"" + VAR_NAME_PREFIX + i + "\": ";
                 if(propList.get(i).repetition != "repeated"){
-                    if (record[i] == ""){
-                        record[i] = "null";
-                    } else if (propList.get(i).type == "bytearray"){
-                        record[i] = "\"" + record[i] + "\"";
+                    joString += formatValueForJson(record[i], propList.get(i).type , (i < propList.size() - 1));
+                } else {
+                    if (record[i].length() == 0) {
+                        joString += "[]";
+                    } else {
+                        String[] items = record[i].split("\\|");
+                        joString += "[";
+
+                        for (int j = 0; j < items.length; j++) {
+                            joString += formatValueForJson(items[j], propList.get(i).type, (j < items.length - 1));
+                        }
+                        joString += "]";
+                        if (i < propList.size() - 1) {
+                            joString += ", ";
+                        }
                     }
-                    joString += record[i];
-                    if (i < propList.size() -1) { joString += ", "; }
                 }
             }
         joString += "}";
@@ -249,6 +263,18 @@ public class TestFileGenerator {
         jsonReader.close();
 
         return jo;
+    }
+
+    private static String formatValueForJson(String val, String type, boolean notLast){
+        if (val == "") {
+            val = "null";
+        } else if (type == "binary") {
+            val = "\"" + val + "\"";
+        }
+        if (notLast) {
+            val += ", ";
+        }
+        return val;
     }
 
     /** ------------ Generative Routines ----------- */
@@ -285,7 +311,6 @@ public class TestFileGenerator {
         }
     }
 
-    // generate test case
     public static void generateTestCase(TestFileName tfn, TestOptions options){
 
         // make files, open for writing
@@ -323,11 +348,7 @@ public class TestFileGenerator {
                 // create a record that fits the schema
                 String[] record = new String[propList.size()];
                 for (int i = 0; i < propList.size(); i++) {
-                    if(propList.get(i).repetition == "repeated"){
-                        record[i] = "[]"; // propList.get(i).getNextRepeated();
-                    } else {
-                        record[i] = propList.get(i).getNextPrimitive();
-                    }
+                    record[i] = propList.get(i).getNextValue();
                 }
 
                 // write data to parquet file
@@ -384,6 +405,10 @@ public class TestFileGenerator {
         // TODO: test Repeated Types
 
         // TODO: test Block and Page size boundary writes
+
+        TestFileName tfn = new TestFileName("TestRepeatedString", "testcases/");
+        TestOptions paramSet = new TestOptions("binary", false, 1, 7, RepetitionPattern.ALL_REPEATED);
+        generateTestCase(tfn, paramSet);
     }
 
 }

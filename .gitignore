@@ -1,4 +1,5 @@
 target/
+testcases/*.crc
 *.class
 *.jar
 

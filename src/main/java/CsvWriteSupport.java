@@ -10,6 +10,7 @@ import org.apache.parquet.io.ParquetEncodingException;
 import org.apache.parquet.io.api.Binary;
 import org.apache.parquet.io.api.RecordConsumer;
 import org.apache.parquet.schema.MessageType;
+import org.apache.parquet.schema.Type;
 
 public class CsvWriteSupport extends WriteSupport<List<String>> {
   MessageType schema;
@@ -32,6 +33,10 @@ public class CsvWriteSupport extends WriteSupport<List<String>> {
     recordConsumer = r;
   }
 
+  /** See org.apache.parquet.io.api.RecordConsumer for proper sequence of
+      methods to write a record correctly
+  */
+
   @Override
   public void write(List<String> values) {
     if (values.size() != cols.size()) {
@@ -45,29 +50,19 @@ public class CsvWriteSupport extends WriteSupport<List<String>> {
       // val.length() == 0 indicates a NULL value.
       if (val.length() > 0) {
         recordConsumer.startField(cols.get(i).getPath()[0], i);
-        switch (cols.get(i).getType()) {
-        case BOOLEAN:
-          recordConsumer.addBoolean(Boolean.parseBoolean(val));
-          break;
-        case FLOAT:
-          recordConsumer.addFloat(Float.parseFloat(val));
-          break;
-        case DOUBLE:
-          recordConsumer.addDouble(Double.parseDouble(val));
-          break;
-        case INT32:
-          recordConsumer.addInteger(Integer.parseInt(val));
-          break;
-        case INT64:
-          recordConsumer.addLong(Long.parseLong(val));
-          break;
-        case BINARY:
-          recordConsumer.addBinary(stringToBinary(val));
-          break;
-        default:
-          throw new ParquetEncodingException(
-              "Unsupported column type: " + cols.get(i).getType());
+
+        // assumption: schema fields' and columns' indices match
+        // (idk why they wouldn't, but haven't found a way to verify that)
+        if (schema.getType(i).getRepetition() != Type.Repetition.REPEATED) {
+          addPrimitiveValue(val, cols.get(i));
+        } else {
+          // parse each item in a list and add it
+          String[] items = val.split("\\|");
+          for (String item: items){
+            addPrimitiveValue(item, cols.get(i));
+          }
         }
+
         recordConsumer.endField(cols.get(i).getPath()[0], i);
       }
     }
@@ -76,5 +71,31 @@ public class CsvWriteSupport extends WriteSupport<List<String>> {
 
   private Binary stringToBinary(Object value) {
     return Binary.fromString(value.toString());
+  }
+
+  private void addPrimitiveValue(String val, ColumnDescriptor cd){
+    switch (cd.getType()) {
+      case BOOLEAN:
+        recordConsumer.addBoolean(Boolean.parseBoolean(val));
+        break;
+      case FLOAT:
+        recordConsumer.addFloat(Float.parseFloat(val));
+        break;
+      case DOUBLE:
+        recordConsumer.addDouble(Double.parseDouble(val));
+        break;
+      case INT32:
+        recordConsumer.addInteger(Integer.parseInt(val));
+        break;
+      case INT64:
+        recordConsumer.addLong(Long.parseLong(val));
+        break;
+      case BINARY:
+        recordConsumer.addBinary(stringToBinary(val));
+        break;
+      default:
+        throw new ParquetEncodingException(
+                "Unsupported column type: " + cd.getType());
+    }
   }
 }
