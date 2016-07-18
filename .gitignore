@@ -4,10 +4,6 @@ testcases/
 *.jar
 testcases.zip
 
-parquet-mr-tests/.classpath
-parquet-mr-tests/.project
-parquet-mr-tests/.settings/
-parquet-mr-tests/target/
-
 .idea/
 *.iml
+src/main/resources/
