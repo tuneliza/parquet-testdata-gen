@@ -2,6 +2,7 @@ target/
 testcases/
 *.class
 *.jar
+testcases.zip
 
 parquet-mr-tests/.classpath
 parquet-mr-tests/.project
