@@ -1,0 +1,3 @@
+message m {
+  repeated float var_0;
+}

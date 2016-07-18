@@ -1,0 +1,3 @@
+message m {
+  required int64 var_0;
+}

@@ -1,0 +1,3 @@
+message m {
+  required double var_0;
+}

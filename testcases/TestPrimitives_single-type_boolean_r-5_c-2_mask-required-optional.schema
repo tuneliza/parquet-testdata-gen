@@ -1,0 +1,4 @@
+message m {
+  required boolean var_0;
+  optional boolean var_1;
+}

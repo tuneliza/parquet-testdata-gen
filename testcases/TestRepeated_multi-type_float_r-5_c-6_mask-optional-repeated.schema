@@ -1,0 +1,8 @@
+message m {
+  optional float var_0;
+  repeated double var_1;
+  optional binary var_2;
+  repeated boolean var_3;
+  optional int32 var_4;
+  repeated int64 var_5;
+}

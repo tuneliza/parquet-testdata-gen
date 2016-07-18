@@ -1,0 +1,4 @@
+message m {
+  required double var_0;
+  optional double var_1;
+}

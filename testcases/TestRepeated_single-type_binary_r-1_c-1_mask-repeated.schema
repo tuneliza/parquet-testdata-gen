@@ -1,0 +1,3 @@
+message m {
+  repeated binary var_0;
+}

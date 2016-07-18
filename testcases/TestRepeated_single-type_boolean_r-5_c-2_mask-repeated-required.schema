@@ -1,0 +1,4 @@
+message m {
+  repeated boolean var_0;
+  required boolean var_1;
+}

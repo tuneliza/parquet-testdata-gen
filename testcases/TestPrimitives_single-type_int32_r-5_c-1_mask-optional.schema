@@ -1,0 +1,3 @@
+message m {
+  optional int32 var_0;
+}
