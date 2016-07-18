@@ -1,4 +1,0 @@
-message m {
-  required int32 var_0;
-  optional int32 var_1;
-}

@@ -1,3 +1,0 @@
-message m {
-  optional float var_0;
-}

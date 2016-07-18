@@ -137,6 +137,7 @@ public class TestFileGenerator {
 
         // test Primitive Types
         ArrayList<TestOptions> options = new ArrayList<TestOptions>();
+        // TODO: 5 = maximum number of values in any range - generalize
         for (int i = 0; i < rawTypeOptions.size(); i++) {
             options.add(new TestOptions(rawTypeOptions.get(i), false, 1, 1, RepetitionPattern.ALL_REQUIRED));
             options.add(new TestOptions(rawTypeOptions.get(i), false, 1, 5, RepetitionPattern.ALL_OPTIONAL));
@@ -145,11 +146,17 @@ public class TestFileGenerator {
         options.add(new TestOptions("int64", true, rawTypeOptions.size(), 1, RepetitionPattern.ALL_OPTIONAL));
         options.add(new TestOptions("float", true, rawTypeOptions.size(), 5, RepetitionPattern.MIX_REQUIRED_OPTIONAL));
 
+        // if directory does not exist, make it
+        String tdname = "testcases";
+        File td = new File(tdname);
+        if(!td.exists()){
+            td.mkdir();
+        }
 
         //repeat for every set of variables
         for (int i = 0; i < options.size(); i++) {
-            // create file name
-            TestFileName tfn = new TestFileName("TestPrimitives", "testcases/");
+            // build file name
+            TestFileName tfn = new TestFileName("TestPrimitives", tdname + "/");
             TestOptions paramSet = options.get(i);
             if (paramSet.rotateType){
                 tfn.addVariation("multi-type");
@@ -163,13 +170,36 @@ public class TestFileGenerator {
             generateTestCase(tfn, paramSet);
         }
 
-        // TODO: test Repeated Types
+        // test Repeated Types (same test options work, with different test masks
+        options = new ArrayList<TestOptions>();
+        for (int i = 0; i < rawTypeOptions.size(); i++) {
+            options.add(new TestOptions(rawTypeOptions.get(i), false, 1, 1, RepetitionPattern.ALL_REPEATED));
+            options.add(new TestOptions(rawTypeOptions.get(i), false, 1, 5, RepetitionPattern.ALL_REPEATED));
+            options.add(new TestOptions(rawTypeOptions.get(i), false, 2, 5, RepetitionPattern.MIX_REPEATED_REQUIRED));
+        }
+        options.add(new TestOptions("int64", true, rawTypeOptions.size(), 1, RepetitionPattern.MIX_OPTIONAL_REPEATED));
+        options.add(new TestOptions("float", true, rawTypeOptions.size(), 5, RepetitionPattern.MIX_OPTIONAL_REPEATED));
+
+        //repeat for every set of variables
+        for (int i = 0; i < options.size(); i++) {
+            // build file name
+            TestFileName tfn = new TestFileName("TestRepeated", "testcases/");
+            TestOptions paramSet = options.get(i);
+            if (paramSet.rotateType){
+                tfn.addVariation("multi-type");
+            } else {
+                tfn.addVariation("single-type");
+            }
+            tfn.addVariation(paramSet.firstType)
+                    .addVariation("r-" + paramSet.numRecords)
+                    .addVariation("c-" + paramSet.numColumns)
+                    .addVariation(repPatternToString(paramSet.repMask));
+            generateTestCase(tfn, paramSet);
+        }
 
         // TODO: test Block and Page size boundary writes
 
-        TestFileName tfn = new TestFileName("TestRepeatedString", "testcases/");
-        TestOptions paramSet = new TestOptions("binary", false, 1, 7, RepetitionPattern.ALL_REPEATED);
-        generateTestCase(tfn, paramSet);
+
     }
 
     /**
@@ -382,9 +412,9 @@ public class TestFileGenerator {
                             joString += formatValueForJson(items[j], propList.get(i).type, (j < items.length - 1));
                         }
                         joString += "]";
-                        if (i < propList.size() - 1) {
-                            joString += ", ";
-                        }
+                    }
+                    if (i < propList.size() - 1) {
+                        joString += ", ";
                     }
                 }
             }
@@ -399,10 +429,10 @@ public class TestFileGenerator {
     }
 
     private static String formatValueForJson(String val, String type, boolean notLast){
-        if (val == "") {
-            val = "null";
-        } else if (type == "binary") {
+        if (type == "binary") {
             val = "\"" + val + "\"";
+        } else if (val == "") {
+            val = "null";
         }
         if (notLast) {
             val += ", ";
