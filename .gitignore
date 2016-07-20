@@ -2,7 +2,7 @@ target/
 testcases/
 *.class
 *.jar
-testcases.zip
+*.zip
 
 .idea/
 *.iml
