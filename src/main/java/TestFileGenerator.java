@@ -48,18 +48,21 @@ public class TestFileGenerator {
     }
 
     static class StorageDimensions{
-        static final int TEST_PAGE_SIZE = 128; // make it small for faster testing
+        static final int TEST_PAGE_SIZE = 1024; // make it small for faster testing
+
         int numColumns;
         int numBlocks;
         int numPagesPerBlock;
+
         StorageDimensions(int columns, int blocks, int pages){
             numColumns = columns;
             numBlocks = blocks;
             numPagesPerBlock = pages;
         }
 
-        long calcBlockSize(){
-            return ((long) TEST_PAGE_SIZE) * numColumns * numPagesPerBlock;
+        // its better to overestimate this
+        long estimateBlockSize(){
+            return ((long) TEST_PAGE_SIZE) * numColumns * numPagesPerBlock * 4;
         }
 
         long calcNumRecords(int recordSize){
@@ -219,14 +222,14 @@ public class TestFileGenerator {
                     .addVariation("ps-" + StorageDimensions.TEST_PAGE_SIZE);
             generateTestCase(tfn, paramSet);
         }
-        */
-
+*/
         // ------------------------------------
-        // test a big file
-        TestOptions set = new TestOptions("float", true, rawTypeOptions.size(), 1024*1024,
+        // test a big file, default page/block sizes
+        TestOptions set = new TestOptions("float", true, rawTypeOptions.size(), 128*1024,
                 RepetitionPattern.MIX_OPTIONAL_REPEATED);
 
         // build file name
+        String tdname = "testcases";  // duplicate, defined above (commented)
         TestFileName tfn = new TestFileName("TestBigFile", tdname + "/");
         tfn.addVariation(set.firstType)
                 .addVariation("r-" + set.numRecords)
@@ -234,6 +237,19 @@ public class TestFileGenerator {
                 .addVariation(repPatternToString(set.repMask));
         generateTestCase(tfn, set);
 
+        // page borders, no string/binary
+        StorageDimensions sd = new StorageDimensions(5, 1, 4);
+        TestOptions set = new TestOptions("float", true, sd.numColumns, sd.calcNumRecords(8),
+                RepetitionPattern.MIX_OPTIONAL_REPEATED, sd);
+
+        // build file name
+        String tdname = "testcases";  // duplicate, defined above (commented)
+        TestFileName tfn = new TestFileName("TestPageBorder", tdname + "/");
+        tfn.addVariation(set.firstType)
+                .addVariation("r-" + set.numRecords)
+                .addVariation("c-" + set.numColumns)
+                .addVariation(repPatternToString(set.repMask));
+        generateTestCase(tfn, set);
 
     }
 
@@ -274,7 +290,7 @@ public class TestFileGenerator {
                 pWriter = new CsvParquetWriter(path, schema, false); // enableDictionary: false - plain encoding
             } else {
                 pWriter = new CsvParquetWriter(path, schema, false,
-                        (int) options.storage.calcBlockSize(), StorageDimensions.TEST_PAGE_SIZE);
+                        (int) options.storage.estimateBlockSize(), StorageDimensions.TEST_PAGE_SIZE);
             }
 
             //JsonWriter jsonWriter = Json.createWriter(new FileWriter(outJsonFile));
