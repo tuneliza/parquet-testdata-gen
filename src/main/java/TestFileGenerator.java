@@ -108,7 +108,7 @@ public class TestFileGenerator {
         valueMap.put("float", new String[]{"0.0", "1.12", "-71234.56", ""});
         valueMap.put("double", new String[]{"0.0", "-1.12", "71234.56", "-5.00000000011", ""});
         valueMap.put("binary", new String[]{"@","cow says \'Mooo\'", "12345", "true", ""});
-        // TODO: ^ how to make sure it's a string? -> invoke Types.as(UTF8)?
+        // TODO: ^ how to make sure it's a string? -> invoke Types.as(UTF8)
     }
     private static final int[] repeatedTypeSizes = new int[]{1, 3, 20, 0}; // test a very large size separately
 
@@ -149,10 +149,7 @@ public class TestFileGenerator {
             } else {
                 tfn.addVariation("single-type");
             }
-            tfn.addVariation(paramSet.firstType)
-                    .addVariation("r-" + paramSet.numRecords)
-                    .addVariation("c-" + paramSet.numColumns)
-                    .addVariation(repPatternToString(paramSet.repMask));
+            tfn.appendTail(paramSet);
             generateTestCase(tfn, paramSet);
         }
 
@@ -177,78 +174,42 @@ public class TestFileGenerator {
             } else {
                 tfn.addVariation("single-type");
             }
-            tfn.addVariation(paramSet.firstType)
-                    .addVariation("r-" + paramSet.numRecords)
-                    .addVariation("c-" + paramSet.numColumns)
-                    .addVariation(repPatternToString(paramSet.repMask));
+            tfn.appendTail(paramSet);
             generateTestCase(tfn, paramSet);
         }
 
-        // --------------------------------------
-        // test Block and Page size boundary writes
-        /**
+        /* --------------------------------------
+         Test Block and Page size boundary writes
+
          Storage size parameters : data-block-page dimensions
          Goal of this set is to test proper reading block at page/block boundaries;
          (This assumes that all columns are of the same type int32; pageSize is set in StorageDimensions.TEST_PAGE_SIZE)
          */
-        /* StorageDimensions[] storageVariants = new StorageDimensions[]{
-                new StorageDimensions(1, 1, 1),
-                new StorageDimensions(1, 2, 2),
-                new StorageDimensions(1, 8, 16),
-                new StorageDimensions(4, 1, 2),
-                new StorageDimensions(4, 2, 16),
-                new StorageDimensions(4, 8, 1),
-                new StorageDimensions(50, 1, 16),
-                new StorageDimensions(50, 2, 1),
-                new StorageDimensions(50, 8, 2)
-        };
-
+        // page borders, no string/binary
+        StorageDimensions sd = new StorageDimensions(rawTypeOptions.size(), 1, 4);
         options = new ArrayList<TestOptions>();
-        for (StorageDimensions sv : storageVariants) {
-            options.add(new TestOptions("int32", false, sv.numColumns, sv.calcNumRecords(4),
-                    RepetitionPattern.MIX_REQUIRED_OPTIONAL, sv));
-        }
+        options.add( new TestOptions("float", true, sd.numColumns, sd.calcNumRecords(8),
+                RepetitionPattern.MIX_OPTIONAL_REPEATED, sd));
+        options.add( new TestOptions("int64", true, sd.numColumns, sd.calcNumRecords(8),
+                RepetitionPattern.MIX_OPTIONAL_REPEATED, sd));
 
         //repeat for every set of variables
         for (int i = 0; i < options.size(); i++) {
             // build file name
-            TestFileName tfn = new TestFileName("TestBoundary", tdname + "/");
+            TestFileName tfn = new TestFileName("TestPageBorder", tdname + "/");
             TestOptions paramSet = options.get(i);
-            tfn.addVariation(paramSet.firstType)
-                    .addVariation("r-" + paramSet.numRecords)
-                    .addVariation("c-" + paramSet.numColumns)
-                    .addVariation(repPatternToString(paramSet.repMask))
-                    .addVariation("bs-" + paramSet.storage.calcBlockSize())
-                    .addVariation("ps-" + StorageDimensions.TEST_PAGE_SIZE);
+            tfn.appendTail(paramSet);
             generateTestCase(tfn, paramSet);
         }
-*/
+
         // ------------------------------------
         // test a big file, default page/block sizes
         TestOptions set = new TestOptions("float", true, rawTypeOptions.size(), 128*1024,
                 RepetitionPattern.MIX_OPTIONAL_REPEATED);
 
         // build file name
-        String tdname = "testcases";  // duplicate, defined above (commented)
         TestFileName tfn = new TestFileName("TestBigFile", tdname + "/");
-        tfn.addVariation(set.firstType)
-                .addVariation("r-" + set.numRecords)
-                .addVariation("c-" + set.numColumns)
-                .addVariation(repPatternToString(set.repMask));
-        generateTestCase(tfn, set);
-
-        // page borders, no string/binary
-        StorageDimensions sd = new StorageDimensions(5, 1, 4);
-        TestOptions set = new TestOptions("float", true, sd.numColumns, sd.calcNumRecords(8),
-                RepetitionPattern.MIX_OPTIONAL_REPEATED, sd);
-
-        // build file name
-        String tdname = "testcases";  // duplicate, defined above (commented)
-        TestFileName tfn = new TestFileName("TestPageBorder", tdname + "/");
-        tfn.addVariation(set.firstType)
-                .addVariation("r-" + set.numRecords)
-                .addVariation("c-" + set.numColumns)
-                .addVariation(repPatternToString(set.repMask));
+        tfn.appendTail(set);
         generateTestCase(tfn, set);
 
     }
@@ -426,6 +387,13 @@ public class TestFileGenerator {
 
         String getNameSchema(){
             return path+ name +".schema";
+        }
+
+        void appendTail(TestOptions paramSet){
+            this.addVariation(paramSet.firstType)
+                    .addVariation("r-" + paramSet.numRecords)
+                    .addVariation("c-" + paramSet.numColumns)
+                    .addVariation(repPatternToString(paramSet.repMask));
         }
     }
 
