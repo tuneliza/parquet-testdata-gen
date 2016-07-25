@@ -99,6 +99,7 @@ public class TestFileGenerator {
 
     // TODO: look up edge values
     // List of sample values (pool) for each data type. Last element is always a Null-value.
+    // any test set must be annotated with its type first, followed by a dash "binary-bigString"
     private static final HashMap<String, String[]> valueMap;
     static{
         valueMap = new HashMap<String, String[]>();
@@ -108,8 +109,15 @@ public class TestFileGenerator {
         valueMap.put("float", new String[]{"0.0", "1.12", "-71234.56", ""});
         valueMap.put("double", new String[]{"0.0", "-1.12", "71234.56", "-5.00000000011", ""});
         valueMap.put("binary", new String[]{"@","cow says \'Mooo\'", "12345", "true", ""});
-        // TODO: ^ how to make sure it's a string? -> invoke Types.as(UTF8)
+        valueMap.put("binary-bigString", new String[]{"This is a pretty big string to try get a split across a page boundary", ""});
     }
+
+    // convert value set name to a parquet type
+    private static String extractType(String valueSetName){
+        String[] parts = valueSetName.split("-");
+        return parts[0];
+    }
+
     private static final int[] repeatedTypeSizes = new int[]{1, 3, 20, 0}; // test a very large size separately
 
 
@@ -150,7 +158,11 @@ public class TestFileGenerator {
                 tfn.addVariation("single-type");
             }
             tfn.appendTail(paramSet);
-            generateTestCase(tfn, paramSet);
+
+            ArrayList<VarProperties> propList = makePropertyList( valueMap,
+                    buildRawTypeSequence(paramSet.numColumns, paramSet.firstType, paramSet.rotateType),
+                    paramSet.repMask);
+            generateTestCase(tfn, paramSet, propList);
         }
 
         // --------------------------------------
@@ -175,7 +187,10 @@ public class TestFileGenerator {
                 tfn.addVariation("single-type");
             }
             tfn.appendTail(paramSet);
-            generateTestCase(tfn, paramSet);
+            ArrayList<VarProperties> propList = makePropertyList(valueMap,
+                    buildRawTypeSequence(paramSet.numColumns, paramSet.firstType, paramSet.rotateType),
+                    paramSet.repMask);
+            generateTestCase(tfn, paramSet, propList);
         }
 
         /* --------------------------------------
@@ -185,7 +200,7 @@ public class TestFileGenerator {
          Goal of this set is to test proper reading block at page/block boundaries;
          (This assumes that all columns are of the same type int32; pageSize is set in StorageDimensions.TEST_PAGE_SIZE)
          */
-        // page borders, no string/binary
+        // page borders
         StorageDimensions sd = new StorageDimensions(rawTypeOptions.size(), 1, 4);
         options = new ArrayList<TestOptions>();
         options.add( new TestOptions("float", true, sd.numColumns, sd.calcNumRecords(8),
@@ -199,26 +214,49 @@ public class TestFileGenerator {
             TestFileName tfn = new TestFileName("TestPageBorder", tdname + "/");
             TestOptions paramSet = options.get(i);
             tfn.appendTail(paramSet);
-            generateTestCase(tfn, paramSet);
+            ArrayList<VarProperties> propList = makePropertyList( valueMap,
+                    buildRawTypeSequence(paramSet.numColumns, paramSet.firstType, paramSet.rotateType),
+                    paramSet.repMask);
+            generateTestCase(tfn, paramSet, propList);
         }
+
+        //page borders with big strings
+        sd = new StorageDimensions(2, 1, 128);
+        TestOptions set = new TestOptions("binary-bigString", false, sd.numColumns, sd.calcNumRecords(69),
+                RepetitionPattern.MIX_OPTIONAL_REPEATED, sd);
+        ArrayList<String> typeSeq = new ArrayList<String>();
+        typeSeq.add("binary-bigString");
+        typeSeq.add("binary-bigString");
+
+        //repeat for every set of variables
+        // build file name
+        TestFileName tfn = new TestFileName("TestPageBorder", tdname + "/");
+        tfn.appendTail(set);
+
+        ArrayList<VarProperties> propList = makePropertyList( valueMap,
+                typeSeq, set.repMask);
+        generateTestCase(tfn, set, propList);
 
         // ------------------------------------
         // test a big file, default page/block sizes
-        TestOptions set = new TestOptions("float", true, rawTypeOptions.size(), 128*1024,
+        set = new TestOptions("float", true, rawTypeOptions.size(), 128*1024,
                 RepetitionPattern.MIX_OPTIONAL_REPEATED);
 
         // build file name
-        TestFileName tfn = new TestFileName("TestBigFile", tdname + "/");
+        tfn = new TestFileName("TestBigFile", tdname + "/");
         tfn.appendTail(set);
-        generateTestCase(tfn, set);
+        propList = makePropertyList( valueMap,
+                buildRawTypeSequence(set.numColumns, set.firstType, set.rotateType),
+                set.repMask);
+        generateTestCase(tfn, set, propList);
 
     }
 
     /**
-     * Create triplets of .parquet, .schema and .json files corresponding to a set of test parameter options
+     * Create a triplet of .parquet, .schema and .json files corresponding to a set of test parameter options
      */
 
-    public static void generateTestCase(TestFileName tfn, TestOptions options){
+    public static void generateTestCase(TestFileName tfn, TestOptions options, ArrayList<VarProperties> propList){
 
         // make files, open for writing
         File outParquetFile = new File(tfn.getNameParquet());
@@ -231,8 +269,7 @@ public class TestFileGenerator {
         deleteFileIfExists(outJsonFile);
 
         // create schema, along with corresponding property list
-        ArrayList<VarProperties> propList = makePropertyList(options.numColumns, options.firstType,
-                options.rotateType, options.repMask);
+
         String rawSchema = emitFlatSchemaString(propList);
         MessageType schema = MessageTypeParser.parseMessageType(rawSchema);
 
@@ -289,30 +326,33 @@ public class TestFileGenerator {
     // Tuple of properties for a variable in schema
     static class VarProperties{
         String repetition;
-        String type;
+        String type; // TODO: refactor type -> value set
+        String[] valueSet;  // set of values, last must be null ("")
 
-        private int idx;        // position of next value in the valueMap[type]
-        private int repSizeIdx;
+        private int idx;        // position of next value in this.values
+        private int repSizeIdx; // position in repetition mask
 
-        VarProperties(String repetition, String type){
+        VarProperties(String repetition, String type, String[] values){
             this.repetition = repetition;
             this.type = type;
+            this.valueSet = values;
+
             idx = 0;
             repSizeIdx = 0;
         }
 
         private String getNextPrimitive(){
-            String value = valueMap.get(type)[idx];
-            if(repetition == "optional"){
-                idx = (idx + 1) % valueMap.get(type).length;
+            String value = valueSet[idx];
+            if(repetition.equals("optional")){
+                idx = (idx + 1) % valueSet.length;
             } else {
-                idx = (idx + 1) % (valueMap.get(type).length - 1); // skip over the null-value
+                idx = (idx + 1) % (valueSet.length - 1); // skip over the null-value
             }
             return value;
         }
 
         String getNextValue(){
-            if (repetition == "repeated") {
+            if (repetition.equals("repeated")) {
                 String values = "";
                 if (repeatedTypeSizes[repSizeIdx] > 0) {
                     values += getNextPrimitive();
@@ -329,21 +369,34 @@ public class TestFileGenerator {
     }
 
     // build a list of variable properties for a flat schema
-    private static ArrayList<VarProperties> makePropertyList(int size, String firstType, boolean rotateTypes, RepetitionPattern rp){
-        ArrayList<VarProperties> propertyList = new ArrayList<VarProperties>(size);
-        int ti = rawTypeOptions.indexOf(firstType); // index for types
+    private static ArrayList<VarProperties> makePropertyList(HashMap<String, String[]> valueSets, ArrayList<String> typeSequence, RepetitionPattern rp){
+        ArrayList<VarProperties> propertyList = new ArrayList<VarProperties>(typeSequence.size());
         int rmi = 0; // index for RepetitionMasks
 
+        for (int i = 0; i < typeSequence.size(); i++) {
+            propertyList.add(new VarProperties(repetitionMasks.get(rp)[rmi], extractType(typeSequence.get(i)),
+                    valueSets.get(typeSequence.get(i))));
+
+            // advance indexes
+            rmi = (rmi + 1) % repetitionMasks.get(rp).length;
+        }
+        return propertyList;
+    }
+
+    // build simple type sequence out of raw rypes
+    private static ArrayList<String> buildRawTypeSequence(int size, String firstType, boolean rotateTypes){
+        ArrayList<String> typeSequence = new ArrayList<String>(size);
+        int ti = rawTypeOptions.indexOf(firstType); // index for types
+
         for (int i = 0; i < size; i++) {
-            propertyList.add(new VarProperties(repetitionMasks.get(rp)[rmi], rawTypeOptions.get(ti)));
+            typeSequence.add(rawTypeOptions.get(ti));
 
             // advance indexes
             if (rotateTypes) {
                 ti = (ti + 1) % rawTypeOptions.size();
             }
-            rmi = (rmi + 1) % repetitionMasks.get(rp).length;
         }
-        return propertyList;
+        return typeSequence;
     }
 
     // construct a string representation of a flat schema
@@ -354,7 +407,7 @@ public class TestFileGenerator {
         String rawSchema = "message m {\n";
         for (int count = 0; count < propertyList.size(); count++) {
             rawSchema += "  " + propertyList.get(count).repetition +
-                    " " + propertyList.get(count).type +
+                    " " + extractType(propertyList.get(count).type)+
                     " " + VAR_NAME_PREFIX + count + ";\n";
         }
         rawSchema += "}";
@@ -425,7 +478,7 @@ public class TestFileGenerator {
         String joString = "{";
             for(int i=0; i < propList.size(); i++){
                 joString += "\"" + VAR_NAME_PREFIX + i + "\": ";
-                if(propList.get(i).repetition != "repeated"){
+                if(!propList.get(i).repetition.equals("repeated")){
                     joString += formatValueForJson(record[i], propList.get(i).type , (i < propList.size() - 1));
                 } else {
                     if (record[i].length() == 0) {
@@ -455,9 +508,9 @@ public class TestFileGenerator {
     }
 
     private static String formatValueForJson(String val, String type, boolean notLast){
-        if (type == "binary") {
+        if (type.equals("binary")) {
             val = "\"" + val + "\"";
-        } else if (val == "") {
+        } else if (val.equals("")) {
             val = "null";
         }
         if (notLast) {
